@@ -1,0 +1,718 @@
+<!--
+     Michel Micheloti 181003 | Paola Rodrigues Lopes 180115
+-->
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+    <title>Babylon.js sample code</title>
+
+    <!-- Babylon.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.2/dat.gui.min.js"></script>
+    <script src="https://preview.babylonjs.com/ammo.js"></script>
+    <script src="https://preview.babylonjs.com/cannon.js"></script>
+    <script src="https://preview.babylonjs.com/Oimo.js"></script>
+    <script src="https://preview.babylonjs.com/earcut.min.js"></script>
+    <script src="https://preview.babylonjs.com/babylon.js"></script>
+    <script src="https://preview.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+    <script src="https://preview.babylonjs.com/proceduralTexturesLibrary/babylonjs.proceduralTextures.min.js"></script>
+    <script src="https://preview.babylonjs.com/postProcessesLibrary/babylonjs.postProcess.min.js"></script>
+    <script src="https://preview.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+    <script src="https://preview.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+    <script src="https://preview.babylonjs.com/gui/babylon.gui.min.js"></script>
+    <script src="https://preview.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+
+    <style>
+        html,
+        body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .title {
+            position: absolute;
+        }
+
+        .format {
+            background: #00000069;
+            color: #ffffff;
+            padding: 15px;
+            width: 100%;
+            font-size: 14px;
+            font-family: Arial, Helvetica, sans-serif;
+            text-align: center;
+        }
+
+        .footer {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+        }
+
+        .btn {
+            text-decoration: none;
+            background: yellow;
+            color: black;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="title format">
+        Paola Rodrigues Lopes 180115
+    </div>
+    <div class="footer format">
+        <p id="message"></p>
+        <a class="btn" id="btnReload" href="/index.html" style="display: none;">Recomeçar</a>
+    </div>
+    <canvas id="renderCanvas"></canvas>
+    <script>
+        var canvas = document.getElementById("renderCanvas");
+        var walked = false;
+        var hero = null;
+        var area;
+        var items = null;
+        var count = 0;
+        var camera1 = null;
+        var engine = null;
+        var sambaAnim = null;
+        var scene = null;
+        var sceneToRender = null;
+        var createDefaultEngine = function () {
+            return new BABYLON.Engine(canvas, true, {
+                preserveDrawingBuffer: true,
+                stencil: true,
+                disableWebGL2Support: false,
+            });
+        };
+
+        var general;
+
+        const createScene = function () {
+            const scene = new BABYLON.Scene(engine);
+
+            general = new BABYLON.Mesh("general", scene);
+
+            camera1 = new BABYLON.ArcRotateCamera(
+                "camera1",
+                Math.PI / 2,
+                Math.PI / 4,
+                10,
+                new BABYLON.Vector3(0, -5, 0),
+                scene
+            );
+            scene.activeCamera = camera1;
+            scene.activeCamera.attachControl(canvas, true);
+            // camera1.lowerRadiusLimit = 2;
+            // camera1.upperRadiusLimit = 10;
+            camera1.wheelDeltaPercentage = 0.01;
+
+            // Lights
+            var light = new BABYLON.HemisphericLight(
+                "light1",
+                new BABYLON.Vector3(0, 1, 0),
+                scene
+            );
+            light.intensity = 0.6;
+            light.specular = BABYLON.Color3.Black();
+
+            var light2 = new BABYLON.DirectionalLight(
+                "dir01",
+                new BABYLON.Vector3(0, -0.5, -1.0),
+                scene
+            );
+            light2.position = new BABYLON.Vector3(0, 5, 5);
+            //Skybox
+            var skybox = BABYLON.MeshBuilder.CreateBox(
+                "skybox",
+                { size: 500 },
+                scene
+            );
+            skybox.infiniteDistance = true;
+            var skyboxMaterial = new BABYLON.StandardMaterial("skybox", scene);
+            skyboxMaterial.backFaceCulling = false;
+            var files = [
+                "./img/sky.jpg",
+                "./img/sky.jpg",
+                "./img/sky.jpg",
+                "./img/sky.jpg",
+                "./img/sky.jpg",
+                "./img/sky.jpg",
+            ];
+            skyboxMaterial.reflectionTexture = BABYLON.CubeTexture.CreateFromImages(
+                files,
+                scene
+            );
+            skyboxMaterial.reflectionTexture.coordinatesMode =
+                BABYLON.Texture.SKYBOX_MODE;
+            skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
+            skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+            skybox.material = skyboxMaterial;
+
+
+            // Enable physics
+            scene.enablePhysics();
+
+            //Create large ground for valley environment
+            const largeGroundMat = new BABYLON.StandardMaterial("largeGroundMat");
+            largeGroundMat.diffuseTexture = new BABYLON.Texture(
+                "https://assets.babylonjs.com/environments/valleygrass.png"
+            );
+
+            const largeGround = BABYLON.MeshBuilder.CreateGroundFromHeightMap(
+                "largeGround",
+                "./img/map3.jpg",
+                {
+                    width: 250,
+                    height: 250,
+                    subdivisions: 10,
+                    minHeight: 0,
+                    maxHeight: 40,
+                }
+            );
+            largeGround.material = largeGroundMat;
+
+            // add fisica ao chão
+            largeGround.physicsImpostor = new BABYLON.PhysicsImpostor(
+                largeGround,
+                BABYLON.PhysicsImpostor.BoxImpostor,
+                { mass: 0, friction: 0.5, restitution: 0.7 },
+                scene
+            );
+
+            // Keyboard events
+            var inputMap = {};
+            scene.actionManager = new BABYLON.ActionManager(scene);
+            scene.actionManager.registerAction(
+                new BABYLON.ExecuteCodeAction(
+                    BABYLON.ActionManager.OnKeyDownTrigger,
+                    function (evt) {
+                        inputMap[evt.sourceEvent.key] = evt.sourceEvent.type == "keydown";
+                    }
+                )
+            );
+            scene.actionManager.registerAction(
+                new BABYLON.ExecuteCodeAction(
+                    BABYLON.ActionManager.OnKeyUpTrigger,
+                    function (evt) {
+                        inputMap[evt.sourceEvent.key] = evt.sourceEvent.type == "keydown";
+                    }
+                )
+            );
+
+            // Load hero character
+            BABYLON.SceneLoader.ImportMesh(
+                "",
+                "https://assets.babylonjs.com/meshes/",
+                "HVGirl.glb",
+                scene,
+                function (newMeshes, particleSystems, skeletons, animationGroups) {
+                    hero = newMeshes[0];
+
+                    hero.name = "hero";
+
+                    //Scale the model down
+                    hero.scaling.scaleInPlace(0.1);
+
+                    //Lock camera on the character
+                    camera1.target = hero;
+
+                    //Hero character variables
+                    var heroSpeed = 0.06;
+                    var heroSpeedBackwards = 0.01;
+                    var heroRotationSpeed = 0.1;
+
+                    var animating = true;
+
+                    scene.addMesh(hero);
+
+                    const walkAnim = scene.getAnimationGroupByName("Walking");
+                    const walkBackAnim = scene.getAnimationGroupByName("WalkingBack");
+                    const idleAnim = scene.getAnimationGroupByName("Idle");
+                    sambaAnim = scene.getAnimationGroupByName("Samba");
+
+                    //Rendering loop (executed for everyframe)
+                    scene.onBeforeRenderObservable.add(() => {
+                        var keydown = false;
+                        walked = false;
+                        //Manage the movements of the character (e.g. position, direction)
+                        if (inputMap["w"]) {
+                            if (isValidPosition(heroSpeed)) {
+                                hero.moveWithCollisions(hero.forward.scaleInPlace(heroSpeed));
+                                keydown = true;
+                                walked = true;
+                            }
+                        }
+                        if (inputMap["s"]) {
+                            if (isValidPosition(heroSpeed)) {
+                                hero.moveWithCollisions(
+                                    hero.forward.scaleInPlace(-heroSpeedBackwards)
+                                );
+                                keydown = true;
+                                walked = true;
+                            }
+                        }
+                        if (inputMap["a"]) {
+                            hero.rotate(BABYLON.Vector3.Up(), -heroRotationSpeed);
+                            keydown = true;
+                            walked = true;
+                        }
+                        if (inputMap["d"]) {
+                            hero.rotate(BABYLON.Vector3.Up(), heroRotationSpeed);
+                            keydown = true;
+                            walked = true;
+                        }
+                        
+
+                        //Manage animations to be played
+                        if (keydown) {
+                            if (!animating) {
+                                animating = true;
+                                if (inputMap["s"]) {
+                                    //Walk backwards
+                                    walkBackAnim.start(
+                                        true,
+                                        1.0,
+                                        walkBackAnim.from,
+                                        walkBackAnim.to,
+                                        false
+                                    );
+                                } else {
+                                    //Walk
+                                    walkAnim.start(
+                                        true,
+                                        1.0,
+                                        walkAnim.from,
+                                        walkAnim.to,
+                                        false
+                                    );
+                                }
+                            }
+
+
+                        } else {
+                            if (animating) {
+                                //Default animation is idle when no key is down
+                                idleAnim.start(true, 1.0, idleAnim.from, idleAnim.to, false);
+
+                                //Stop all animations besides Idle Anim when no key is down
+                                // sambaAnim.stop();
+                                walkAnim.stop();
+                                walkBackAnim.stop();
+
+                                //Ensure animation are played only once per rendering loop
+                                animating = false;
+                            }
+                        }
+                        var collected = false;
+                        for (var i = 1; i <= 10; i++) {
+                            var collect = scene.getMeshByName('collectBody' + i);
+                            var itemCollected = scene.getMeshByName(i);
+                            if (collect != null) {
+                                if (collect.intersectsMesh(hero)) {
+                                    disposeItems(itemCollected,collect, items[i-1]);
+                                }
+                            }
+
+                        }
+                        //console.log(aux);
+                    });
+                }
+            );
+
+            loadItems(scene);
+            multipleBarrel(scene, 20);
+            buildMessage();
+            return scene;
+        };
+
+        const buildMessage = () => {
+            let currentItem = items[count];
+            document.getElementById("message").innerHTML = `${currentItem.id} - Encontre ${currentItem.name}`
+        }
+
+        const multipleBarrel = (scene, qtd) => {
+            var min1, min2, max1, max2;
+            min1 = min2 = 5;
+            max1 = max2 = 30;
+            for (let i = 0; i < qtd; i++) {
+                if (i % 2 == 0) {
+                    min1 *= -1;
+                    max2 *= -1;
+                } else {
+                    max1 *= -1;
+                    min2 *= -1;
+                }
+                var a = Math.random() * (max1 - min1) + min1;
+                var b = Math.random() * (max2 - min2) + min2;
+                buildBarrel(scene, a, b);
+            }
+        }
+
+        const buildBarrel = (scene, posx, posz) => {
+            BABYLON.SceneLoader.ImportMesh(
+                "",
+                "https://models.babylonjs.com/",
+                "ExplodingBarrel.glb",
+                scene,
+                function (newMeshes, particleSystems, skeletons, animationGroups) {
+                    var barrel = newMeshes[0];
+
+                    barrel.position.x = posx;
+                    barrel.position.z = posz;
+
+                    const cylinder = BABYLON.MeshBuilder.CreateCylinder(`cBarrel${posx}${posz}`, { height: 3 });
+
+                    cylinder.position = barrel.position;
+                    cylinder.addChild(barrel);
+                    cylinder.isVisible = false;
+
+                    var explosied = false;
+                    scene.onBeforeRenderObservable.add(() => {
+                        if (!explosied) {
+                            if (cylinder.intersectsMesh(hero, true)) {
+                                if (walked) {
+                                    setExplosion(barrel, cylinder, hero._position);
+                                    explosied = true;
+                                }
+                            }
+                        }
+                    });
+
+                    barrel.scaling.scaleInPlace(0.02);
+
+                    scene.addMesh(barrel);
+                }
+            );
+        };
+
+        const isValidPosition = (heroSpeed) => {
+
+            const heroScale = hero.forward.scaleInPlace(heroSpeed);
+            const zIndex = heroScale.z < 0 ? -1 : 1;
+            const xIndex = heroScale.x < 0 ? -1 : 1;
+
+            const nextPositionZ = hero.position.z + heroSpeed * zIndex;
+            const nextPositionX = hero.position.x + heroSpeed * xIndex;
+
+            const radius = Math.sqrt(Math.pow(nextPositionX, 2) + Math.pow(nextPositionZ, 2));
+            return radius <= 30.5;
+        }
+
+        const setExplosion = function (barrel, cylinder, position) {
+            // Make explosion sound
+            const bounce = new BABYLON.Sound("bounce", "./sounds/Explosion-with-Metal-Debris.mp3", scene,
+                null, {
+                loop: false,
+                autoplay: true
+            });
+
+            // Generate particules
+            setParticules(position);
+
+            // exclude barrel
+            barrel.dispose();
+            cylinder.dispose();
+        }
+
+        const setParticules = function (position) {
+            var count = 0;
+            BABYLON.ParticleHelper.CreateAsync("explosion", scene).then((set) => {
+                set.systems.forEach(s => {
+                    s.emitter = new BABYLON.Vector3(position.x, position.y, position.z);
+                    s.disposeOnStop = true;
+                });
+                set.start();
+            });
+        }
+
+        const createParticle = (item) => {
+            var radius = 2;
+            var angle = Math.PI / 3;
+            var particleSystem = new BABYLON.ParticleSystem("particles", 2000, scene);
+
+            //Texture of each particle
+            particleSystem.particleTexture = new BABYLON.Texture("./img/flare.png", scene);
+
+            // Where the particles come from
+            particleSystem.emitter = new BABYLON.Vector3(item.posx, item.posy, item.posz);
+
+            // Colors of all particles
+            particleSystem.color1 = new BABYLON.Color4(0.7, 0.8, 1.0, 1.0);
+            particleSystem.color2 = new BABYLON.Color4(0.2, 0.5, 1.0, 1.0);
+            particleSystem.colorDead = new BABYLON.Color4(0, 0, 0.2, 0.0);
+
+            // Size of each particle (random between...)
+            particleSystem.minSize = 0.1;
+            particleSystem.maxSize = 0.5;
+
+            // Emission rate
+            particleSystem.emitRate = 500;
+
+            /******* Emission Space ********/
+            particleSystem.createConeEmitter(radius, angle);
+
+            // Speed
+            particleSystem.minEmitPower = 2;
+            particleSystem.maxEmitPower = 4;
+            particleSystem.updateSpeed = 0.005;
+
+            particleSystem.targetStopDuration = 2;
+
+            // Start the particle system
+            particleSystem.start();
+
+        }
+
+        items = [
+            {
+                id: 1,
+                name: "a gaivota de fone",
+                posx: 20,
+                posz: 10,
+                posy: 0.5,
+                scale: 0.001,
+                varianteX: 0,
+                variante: 0.5,
+                url: "https://models.babylonjs.com/",
+                glb: "seagulf.glb"
+            },
+            {
+                id: 2,
+                name: "o ventilador",
+                posx: 25,
+                posz: 5,
+                posy: 0,
+                variante: 0,
+                varianteX: 0,
+                scale: 0.02,
+                url: "https://models.babylonjs.com/vintageDeskFan/",
+                glb: "vintageFan_animated.gltf"
+            },
+            {
+                id: 3,
+                name: "o tubarão",
+                posx: 5,
+                posz: 20,
+                posy: 0,
+                variante: 0,
+                varianteX: 0,
+                scale: 0.1,
+                url: "https://models.babylonjs.com/",
+                glb: "shark.glb"
+            },
+            {
+                id: 4,
+                name: "o avião",
+                posx: 15,
+                posz: 20,
+                posy: 0,
+                variante: 0,
+                varianteX: 0,
+                scale: 6,
+                url: "https://models.babylonjs.com/",
+                glb: "aerobatic_plane.glb"
+            },
+            {
+                id: 5,
+                name: "o coração",
+                posx: -15,
+                posz: 20,
+                posy: 0,
+                variante: 0,
+                varianteX: 0,
+                scale: 10,
+                url: "https://models.babylonjs.com/",
+                glb: "emoji_heart.glb"
+            },
+            {
+                id: 6,
+                name: "a bola azul",
+                posx: -15,
+                posz: -20,
+                posy: 0.4,
+                varianteX: 0,
+                variante: 0,
+                scale: 1,
+                url: "https://models.babylonjs.com/Marble/marble/",
+                glb: "marble.gltf"
+            },
+            {
+                id: 7,
+                name: "o alien",
+                posx: 5,
+                posz: -20,
+                posy: 1,
+                varianteX: 0,
+                variante: -0.2,
+                scale: 1.5,
+                url: "https://models.babylonjs.com/",
+                glb: "alien.glb"
+            },
+            {
+                id: 8,
+                name: "a torradeira",
+                posx: -5,
+                posz: -10,
+                posy: 0,
+                varianteX: -0.8,
+                variante: 0,
+                scale: 3,
+                url: "https://models.babylonjs.com/",
+                glb: "toast_acrobatics.glb"
+            },
+            {
+                id: 9,
+                name: "a bola branca",
+                posx: -10,
+                posz: -25,
+                posy: 0.4,
+                varianteX: 0,
+                variante: 0,
+                scale: 0.5,
+                url: "https://models.babylonjs.com/",
+                glb: "shaderBall.glb"
+            },
+            {
+                id: 10,
+                name: "o tênis",
+                posx: 10,
+                posz: 5,
+                posy: 0.5,
+                posy: 0,
+                variante: 0,
+                varianteX: 0,
+                scale: 3,
+                url:"https://models.babylonjs.com/",
+                glb:"shoe_variants.glb",
+            },
+        ];
+
+        const createItems = (scene, item) => {
+            BABYLON.SceneLoader.ImportMesh(
+                "",
+                item.url,
+                item.glb,
+                scene,
+                function (newMeshes, particleSystems, skeletons, animationGroups) {
+                    var itemsToCollect = newMeshes[0];
+
+                    itemsToCollect.name = item.id;
+                    itemsToCollect.position.x = item.posx;
+                    itemsToCollect.position.z = item.posz;
+                    itemsToCollect.position.y = item.posy;
+
+                    let cylinderItems = BABYLON.MeshBuilder.CreateCylinder(`collectBody${item.id}`, { height: 3 });
+
+                    cylinderItems.position.x = item.posx + item.varianteX;
+                    cylinderItems.position.z = item.posz + item.variante;
+                    cylinderItems.position.y = 1.5;
+                    cylinderItems.isVisible = false;
+                    cylinderItems.addChild(itemsToCollect);
+
+
+                    itemsToCollect.scaling.scaleInPlace(item.scale);
+
+                    scene.addMesh(itemsToCollect);
+
+                }
+            );
+        };
+
+        const disposeItems = (itemsToCollect, cylinderItems, item) => {
+
+            if ((count + 1) === item.id) {
+                const bounce = new BABYLON.Sound("bounce", "./sounds/POP.mp3", scene,
+                    null, {
+                    loop: false,
+                    autoplay: true
+                });
+                itemsToCollect.dispose();
+                cylinderItems.dispose();
+                createParticle(item);
+
+                count += 1;
+                if (count <= 9) {
+                    buildMessage();
+                } else {
+                    endGame();
+                }
+                return true;
+            }
+            return false;
+        }
+
+        const endGame = () => {
+            document.getElementById("btnReload").style.display = "block";
+            document.getElementById("message").innerHTML = "Fim de Jogo!";
+
+            const bounce = new BABYLON.Sound("bounce", "./sounds/endGame.mp3", scene,
+                null, {
+                loop: true,
+                autoplay: true
+            });
+
+            //Lock camera on the character 
+            camera1.target = hero;
+
+            //Get the Samba animation Group
+            sambaAnim.start(
+                true,
+                1.0,
+                sambaAnim.from,
+                sambaAnim.to,
+                false
+            );
+        }
+
+        const loadItems = (scene) => {
+            for (let i = 0; i < 10; i++) {
+                createItems(scene, items[i]);
+            }
+        };
+
+        window.initFunction = async function () {
+            var asyncEngineCreation = async function () {
+                try {
+                    return createDefaultEngine();
+                } catch (e) {
+                    console.log(
+                        "the available createEngine function failed. Creating the default engine instead"
+                    );
+                    return createDefaultEngine();
+                }
+            };
+
+            window.engine = await asyncEngineCreation();
+            if (!engine) throw "engine should not be null.";
+            window.scene = createScene();
+        };
+        initFunction().then(() => {
+            sceneToRender = scene;
+            engine.runRenderLoop(function () {
+                if (sceneToRender && sceneToRender.activeCamera) {
+                    sceneToRender.render();
+                }
+            });
+        });
+
+        // Resize
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+    </script>
+</body>
+
+</html>
